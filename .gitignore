@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+.idea/
+.DS_Store
+*.user
+*.suo
+.env
+.env.*
+appsettings.Local.json
+qdrant_storage/
+*.log
