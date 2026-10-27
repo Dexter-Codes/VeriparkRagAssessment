@@ -60,6 +60,6 @@ This is a local demo without authentication or OCR. Complex table layouts remain
 
 ## Debug and answers
 
-In VS Code, select **Assessment: Debug** and press **F5**. Stop any terminal-run copy first so port 5090 is free.
+Run `dotnet run --configuration Debug`, then attach the VS Code .NET debugger to `VeriparkRagAssessment`. Local `.vscode` settings are excluded from Git.
 
 The seven assessment responses are in [assessment_answers.md](assessment_answers.md).
