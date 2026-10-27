@@ -1,10 +1,12 @@
 # Copilot Studio licensing chatbot
 
-## Run locally
+A .NET 10 Minimal API that answers questions from the supplied PDF using Semantic Kernel, Azure OpenAI and local Qdrant. It supports follow-up questions, conversation recall and source citations.
 
-Install the .NET 10 SDK and Docker Desktop. The supplied PDF is in `Documents/Microsoft-Copilot-Studio-Licensing-Guide.pdf`.
+## Setup
 
-Configure your Azure OpenAI endpoint, API key and deployment names using User Secrets:
+Requires the .NET 10 SDK, Docker Desktop, and Azure OpenAI chat and embedding deployments. The chat deployment must support JSON mode.
+
+Run these commands from the project folder to configure credentials outside the repository:
 
 ```sh
 dotnet user-secrets set "AzureOpenAI:Endpoint" "https://YOUR-RESOURCE.openai.azure.com/"
@@ -13,19 +15,17 @@ dotnet user-secrets set "AzureOpenAI:ChatDeployment" "YOUR-CHAT-DEPLOYMENT"
 dotnet user-secrets set "AzureOpenAI:EmbeddingDeployment" "YOUR-EMBEDDING-DEPLOYMENT"
 ```
 
-The chat deployment must support chat completion and JSON mode. Environment variables such as `AzureOpenAI__ApiKey` can also be used. Keep credentials outside the repository.
-
 ```sh
 docker compose up -d
 dotnet restore --locked-mode
 dotnet run
 ```
 
-Open **http://localhost:5090/swagger**. The launch profile uses Development so User Secrets are loaded. Qdrant uses ports 6333 for HTTP and 6334 for gRPC; its data is kept in a Docker volume.
+Open **http://localhost:5090/swagger**. The included launch profile loads User Secrets in Development. The PDF is included under `Documents/`.
 
 ## Use the API
 
-Index the PDF before asking document questions:
+Index the PDF once, then ask a question:
 
 ```sh
 curl -X POST http://localhost:5090/api/documents/index
@@ -35,7 +35,7 @@ curl -X POST http://localhost:5090/api/chat \
   -d '{"question":"What is a Copilot Credit?"}'
 ```
 
-Chat responses contain `conversationId`, `answer` and numbered `sources`, including passage text and PDF page numbers. Reuse the returned conversation ID for follow-up questions:
+Responses include `conversationId`, `answer` and numbered sources with PDF page numbers. Reuse the returned ID for follow-ups:
 
 ```json
 {
@@ -44,26 +44,22 @@ Chat responses contain `conversationId`, `answer` and numbered `sources`, includ
 }
 ```
 
-An omitted conversation ID starts a new session. Restarting the app clears all conversation history.
+Omit the ID to start a new conversation. History clears when the app restarts; the Qdrant index persists in its Docker volume. After changing the PDF or chunk settings, call the indexing endpoint again. Add `?force=true` to force a rebuild.
 
-Unchanged PDFs reuse the existing index. Changes to extraction, chunk settings or the embedding deployment trigger rebuilding on the next indexing request. Use `POST /api/documents/index?force=true` to force a rebuild. Indexing replaces the configured collection, so it should be dedicated to this document.
+Stop the app with Ctrl+C and Qdrant with `docker compose down`.
 
-`GET /api/status` reports that the application is running. Stop Qdrant with `docker compose down`; this retains its data volume.
+## RAG approach
 
-## Implementation
+PdfPig extracts text using word positions to retain table rows and column spacing. Paragraphs are split into chunks of up to **500 tokens**, with up to **75 tokens of overlap** to preserve nearby definitions and conditions. Each chunk retains its PDF page number.
 
-PdfPig groups words into visible rows and preserves wider column gaps. The indexer splits paragraphs into chunks of up to 500 tokens using `cl100k_base`, with up to 75 tokens of overlap. Long paragraphs prefer a nearby line break when splitting. Chunks stay on one page to keep citations precise.
+Azure OpenAI embeds the chunks, and Qdrant retrieves six cosine-similarity matches plus their neighboring chunks for table headers and cross-page context. Semantic Kernel resolves follow-up questions and generates answers from these passages. Citation references are validated, with one retry if invalid.
 
-Qdrant stores cosine vectors with each chunk's text, filename and page number. Search retrieves six matches and their immediately preceding and following chunks, then removes duplicates. This provides nearby table headers and cross-page notes, with at most 18 passages under the default settings.
+The model uses the latest 12 completed exchanges. All user messages remain available for numbered or last-message recall. These defaults are configured in `appsettings.json`.
 
-Semantic Kernel rewrites follow-up questions using recent conversation context, then generates answers from freshly retrieved passages. Citation numbers are validated, with one regeneration attempt if validation fails. First, numbered and last-message recall requests read the stored user messages directly.
+This is a local demo without authentication or OCR. Complex table layouts remain heuristic, and valid citation numbers alone do not guarantee factual correctness.
 
-Model context keeps the latest 12 completed exchanges. A separate list retains all user messages for recall, including recall requests themselves. Chunk size, overlap, retrieval count and history length are configured in `appsettings.json`.
+## Debug and answers
 
-The app is intended for local use and has no authentication. PDF extraction has no OCR; merged cells and multi-column layouts can still be ambiguous. Neighbor retrieval covers one chunk in either direction. Citation validation checks reference numbers rather than factual correctness. If indexing fails partway through rebuilding, rerun it before continuing.
+In VS Code, select **Assessment: Debug** and press **F5**. Stop any terminal-run copy first so port 5090 is free.
 
-## Debug and submission
-
-In VS Code, choose **Assessment: Debug** and press F5. Stop any terminal-run copy first so port 5090 is available. Set a breakpoint in `ChatService.AnswerAsync` and send a request through Swagger. **Assessment: Attach** connects to an existing process.
-
-The chatbot responses to the seven assessment questions are in `assessment_answers.md`
+The seven assessment responses are in [assessment_answers.md](assessment_answers.md).
