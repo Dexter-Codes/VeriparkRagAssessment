@@ -12,16 +12,16 @@ public sealed class AzureOpenAiSettings
 
 public sealed class QdrantSettings
 {
-    [Required] public string Host { get; init; } = "localhost";
-    public int Port { get; init; } = 6334;
-    [Required] public string CollectionName { get; init; } = "copilot_licensing";
+    [Required] public string Host { get; init; } = "";
+    public int Port { get; init; }
+    [Required] public string CollectionName { get; init; } = "";
 }
 
 public sealed class RagSettings
 {
-    public string PdfPath { get; init; } = "Documents/Microsoft-Copilot-Studio-Licensing-Guide.pdf";
-    public int ChunkTokens { get; init; } = 500;
-    public int OverlapTokens { get; init; } = 75;
-    public int RetrievedChunks { get; init; } = 6;
-    public int HistoryTurns { get; init; } = 12;
+    [Required] public string PdfPath { get; init; } = "";
+    [Range(1, int.MaxValue)] public int ChunkTokens { get; init; }
+    [Range(0, int.MaxValue)] public int OverlapTokens { get; init; }
+    [Range(1, int.MaxValue)] public int RetrievedChunks { get; init; }
+    [Range(1, int.MaxValue / 2)] public int HistoryTurns { get; init; }
 }
